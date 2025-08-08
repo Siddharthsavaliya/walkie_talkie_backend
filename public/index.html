@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkie-Talkie Web Test</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .status {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+
+        .status.connected {
+            border-left-color: #28a745;
+        }
+
+        .status.disconnected {
+            border-left-color: #dc3545;
+        }
+
+        .status h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .status-item .label {
+            color: #666;
+        }
+
+        .status-item .value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .channel-section {
+            margin-bottom: 25px;
+        }
+
+        .channel-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .channel-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .channel-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .channel-btn.active {
+            background: #28a745;
+        }
+
+        .channel-btn.broadcasting {
+            background: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .ptt-section {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .ptt-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: #007bff;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3);
+        }
+
+        .ptt-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .ptt-btn:active,
+        .ptt-btn.broadcasting {
+            background: #dc3545;
+            transform: scale(0.95);
+        }
+
+        .ptt-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info {
+            background: #e7f3ff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            border-left: 4px solid #007bff;
+        }
+
+        .info h4 {
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+
+        .info ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .info li {
+            margin-bottom: 5px;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .info li:before {
+            content: "• ";
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        .audio-indicator {
+            background: #d4edda;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            border-left: 4px solid #28a745;
+            display: none;
+        }
+
+        .audio-indicator.show {
+            display: block;
+        }
+
+        .audio-indicator h4 {
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        .error {
+            background: #f8d7da;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .audio-permission-indicator {
+            background: #fff3cd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            border-left: 4px solid #ffc107;
+            color: #856404;
+        }
+        
+        .audio-permission-indicator h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎤 Walkie-Talkie Web</h1>
+            <p>Test real-time voice communication</p>
+        </div>
+
+        <div class="status" id="status">
+            <h3>Connection Status</h3>
+            <div class="status-item">
+                <span class="label">Status:</span>
+                <span class="value" id="connectionStatus">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <span class="label">User ID:</span>
+                <span class="value" id="userId">-</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Current Channel:</span>
+                <span class="value" id="currentChannel">None</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Participants:</span>
+                <span class="value" id="participantCount">0</span>
+            </div>
+        </div>
+
+        <div class="channel-section">
+            <h3>Select Channel</h3>
+            <div class="channel-grid" id="channelGrid">
+                <!-- Channels will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <div class="ptt-section">
+            <button class="ptt-btn" id="pttBtn" disabled>
+                🎤
+            </button>
+            <p style="margin-top: 10px; color: #666; font-size: 0.9rem;">
+                Press and hold to talk
+            </p>
+            
+            <!-- Audio test button for debugging -->
+            <button id="audioTestBtn" style="margin-top: 10px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                🔊 Test Audio
+            </button>
+            
+            <!-- Manual audio test -->
+            <button id="manualAudioTestBtn" style="margin-top: 5px; padding: 8px 16px; background: #ffc107; color: black; border: none; border-radius: 5px; cursor: pointer;">
+                🎵 Manual Audio Test
+            </button>
+        </div>
+
+        <div class="audio-indicator" id="audioIndicator">
+            <h4>🔊 Receiving Audio</h4>
+            <p>Someone is broadcasting in your channel</p>
+        </div>
+        
+        <div class="audio-permission-indicator" id="audioPermissionIndicator" style="display: none;">
+            <h4>🎤 Audio Permission Required</h4>
+            <p>Click here to enable microphone access for real-time communication</p>
+            <button id="enableAudioBtn" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Enable Audio
+            </button>
+        </div>
+        
+        <div class="debug-panel" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px solid #dee2e6;">
+            <h4>🔧 Debug Panel</h4>
+            <button id="testWebRTCOfferBtn" style="margin: 5px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Test WebRTC Offer
+            </button>
+            <button id="testAudioBtn" style="margin: 5px; padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Test Audio Playback
+            </button>
+            <button id="showStateBtn" style="margin: 5px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Show State
+            </button>
+        </div>
+
+        <div class="info">
+            <h4>How to Test</h4>
+            <ul>
+                <li>Select a channel to join</li>
+                <li>Press and hold the microphone button to talk</li>
+                <li>Other users in the same channel will hear you</li>
+                <li>Test with mobile app for cross-platform communication</li>
+            </ul>
+        </div>
+
+        <div class="error" id="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        // WebRTC configuration
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            iceCandidatePoolSize: 10,
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require'
+        };
+
+        // Global variables
+        let socket;
+        let peerConnections = new Map(); // Track multiple peer connections
+        let localStream;
+        let remoteStreams = new Map(); // Track multiple remote streams
+        let currentChannel = null;
+        let isBroadcasting = false;
+        let userId = 'WebUser_' + Math.floor(Math.random() * 10000);
+        let audioElements = []; // Track audio elements for cleanup
+        let iceCandidates = new Map(); // Buffer ICE candidates until remote description is set
+
+        // DOM elements
+        const statusEl = document.getElementById('status');
+        const connectionStatusEl = document.getElementById('connectionStatus');
+        const userIdEl = document.getElementById('userId');
+        const currentChannelEl = document.getElementById('currentChannel');
+        const participantCountEl = document.getElementById('participantCount');
+        const channelGridEl = document.getElementById('channelGrid');
+        const pttBtn = document.getElementById('pttBtn');
+        const audioIndicator = document.getElementById('audioIndicator');
+        const errorEl = document.getElementById('error');
+        const audioTestBtn = document.getElementById('audioTestBtn');
+        const manualAudioTestBtn = document.getElementById('manualAudioTestBtn');
+        const audioPermissionIndicator = document.getElementById('audioPermissionIndicator');
+        const enableAudioBtn = document.getElementById('enableAudioBtn');
+        const testWebRTCOfferBtn = document.getElementById('testWebRTCOfferBtn');
+        const testAudioBtn = document.getElementById('testAudioBtn');
+        const showStateBtn = document.getElementById('showStateBtn');
+
+        // Initialize
+        init();
+
+        function init() {
+            setupSocket();
+            setupChannels();
+            setupPTT();
+            setupAudioTest();
+            setupAudioPermissionButton();
+            setupDebugPanel();
+            updateStatus();
+            
+            // Request audio permissions immediately when page loads
+            requestAudioPermissions();
+        }
+
+        function setupSocket() {
+            socket = io();
+
+            socket.on('connect', () => {
+                updateConnectionStatus('Connected', true);
+                userIdEl.textContent = userId;
+            });
+
+            socket.on('disconnect', () => {
+                updateConnectionStatus('Disconnected', false);
+                leaveChannel();
+            });
+
+            socket.on('channel-joined', (data) => {
+                console.log('🎉 Channel joined successfully:', data);
+                currentChannel = data.channelId;
+                currentChannelEl.textContent = data.channelName;
+                participantCountEl.textContent = data.participants.length;
+                updateChannelButtons();
+                pttBtn.disabled = false;
+                console.log('✅ Ready to broadcast in channel:', data.channelId);
+            });
+
+            socket.on('user-joined', (data) => {
+                participantCountEl.textContent = parseInt(participantCountEl.textContent) + 1;
+            });
+
+            socket.on('user-left', (data) => {
+                participantCountEl.textContent = Math.max(0, parseInt(participantCountEl.textContent) - 1);
+            });
+
+            socket.on('broadcaster-changed', (data) => {
+                console.log('📻 Broadcaster changed:', data);
+                if (data.broadcasterId) {
+                    console.log('🎤 Someone started broadcasting:', data.broadcasterId);
+                    showAudioIndicator();
+                    
+                    // If we're the broadcaster, ensure our state is correct
+                    if (data.broadcasterId === socket.id) {
+                        console.log('✅ Confirmed we are the broadcaster');
+                        isBroadcasting = true;
+                        pttBtn.classList.add('broadcasting');
+                        pttBtn.textContent = '🔴';
+                    }
+                } else {
+                    console.log('🔇 Broadcasting stopped');
+                    hideAudioIndicator();
+                    
+                    // If we were broadcasting, reset our state
+                    if (isBroadcasting) {
+                        console.log('🔄 Resetting broadcasting state');
+                        isBroadcasting = false;
+                        pttBtn.classList.remove('broadcasting');
+                        pttBtn.textContent = '🎤';
+                    }
+                }
+            });
+
+            socket.on('webrtc-offer', async (data) => {
+                console.log('🎯 Received WebRTC offer from:', data.fromId);
+                console.log('Offer data:', data);
+                console.log('Current broadcasting state:', isBroadcasting);
+                
+                if (isBroadcasting) {
+                    console.log('Ignoring offer - currently broadcasting');
+                    return;
+                }
+                
+                try {
+                    await handleWebRTCOffer(data);
+                    console.log('✅ WebRTC offer handled successfully');
+                } catch (error) {
+                    console.error('❌ Failed to handle WebRTC offer:', error);
+                    showError('Failed to handle WebRTC offer: ' + error.message);
+                }
+            });
+
+            socket.on('webrtc-answer', async (data) => {
+                console.log('Received WebRTC answer from:', data.fromId);
+                await handleWebRTCAnswer(data);
+            });
+
+            socket.on('ice-candidate', async (data) => {
+                console.log('🧊 Received ICE candidate from:', data.fromId);
+                console.log('ICE candidate data:', data);
+                
+                try {
+                    await handleICECandidate(data);
+                } catch (error) {
+                    console.error('❌ Failed to handle ICE candidate:', error);
+                }
+            });
+
+            socket.on('error', (data) => {
+                showError(data.message);
+            });
+        }
+
+        function setupChannels() {
+            const channels = [
+                { id: 'channel-1', name: 'Channel 1' },
+                { id: 'channel-2', name: 'Channel 2' },
+                { id: 'channel-3', name: 'Channel 3' },
+                { id: 'channel-4', name: 'Channel 4' },
+                { id: 'channel-5', name: 'Channel 5' }
+            ];
+
+            channelGridEl.innerHTML = channels.map(channel => `
+                <button class="channel-btn" data-channel="${channel.id}">
+                    ${channel.name}
+                </button>
+            `).join('');
+
+            channelGridEl.addEventListener('click', (e) => {
+                if (e.target.classList.contains('channel-btn')) {
+                    const channelId = e.target.dataset.channel;
+                    joinChannel(channelId);
+                }
+            });
+        }
+
+        function setupPTT() {
+            // Press and hold functionality
+            pttBtn.addEventListener('mousedown', startBroadcasting);
+            pttBtn.addEventListener('mouseup', stopBroadcasting);
+            pttBtn.addEventListener('mouseleave', stopBroadcasting);
+            
+            // Touch events for mobile
+            pttBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startBroadcasting();
+            });
+            pttBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                stopBroadcasting();
+            });
+            
+            // Prevent default click behavior to avoid toggle
+            pttBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+            });
+            
+            // Enable audio context on first user interaction
+            document.addEventListener('click', enableAudioContext, { once: true });
+            document.addEventListener('touchstart', enableAudioContext, { once: true });
+        }
+        
+        async function requestAudioPermissions() {
+            try {
+                console.log('Requesting audio permissions...');
+                
+                // Request microphone permission first
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                });
+                
+                console.log('Microphone permission granted');
+                
+                // Enable audio context
+                enableAudioContext();
+                
+                // Create a silent audio element to enable audio playback
+                const silentAudio = new Audio();
+                silentAudio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+                silentAudio.volume = 0;
+                silentAudio.autoplay = true;
+                
+                // Try to play the silent audio to enable audio context
+                try {
+                    await silentAudio.play();
+                    console.log('Audio context enabled successfully');
+                } catch (error) {
+                    console.log('Silent audio play failed, but audio context should still work:', error);
+                }
+                
+                // Store the stream for later use
+                localStream = stream;
+                
+                // Hide permission indicator and show success message
+                audioPermissionIndicator.style.display = 'none';
+                showError('Audio permissions granted - ready for real-time communication!');
+                
+            } catch (error) {
+                console.error('Failed to get audio permissions:', error);
+                showError('Audio permission required for walkie-talkie functionality. Please allow microphone access.');
+                
+                // Show permission indicator
+                audioPermissionIndicator.style.display = 'block';
+            }
+        }
+        
+        function setupAudioPermissionButton() {
+            enableAudioBtn.addEventListener('click', async () => {
+                try {
+                    await requestAudioPermissions();
+                } catch (error) {
+                    console.error('Failed to enable audio:', error);
+                    showError('Failed to enable audio. Please check browser permissions.');
+                }
+            });
+        }
+        
+        function setupDebugPanel() {
+            testWebRTCOfferBtn.addEventListener('click', async () => {
+                console.log('🧪 Testing WebRTC offer...');
+                if (!currentChannel) {
+                    showError('Please join a channel first');
+                    return;
+                }
+                
+                try {
+                    await initializeWebRTC();
+                    console.log('✅ WebRTC test offer sent');
+                } catch (error) {
+                    console.error('❌ WebRTC test failed:', error);
+                    showError('WebRTC test failed: ' + error.message);
+                }
+            });
+            
+            testAudioBtn.addEventListener('click', () => {
+                console.log('🧪 Testing audio playback...');
+                const testAudio = new Audio();
+                testAudio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+                testAudio.volume = 0.1;
+                testAudio.play().then(() => {
+                    console.log('✅ Audio test successful');
+                    showError('Audio test successful - audio is working');
+                }).catch(error => {
+                    console.error('❌ Audio test failed:', error);
+                    showError('Audio test failed: ' + error.message);
+                });
+            });
+            
+            showStateBtn.addEventListener('click', () => {
+                console.log('📊 Current State:');
+                console.log('- Current Channel:', currentChannel);
+                console.log('- Is Broadcasting:', isBroadcasting);
+                console.log('- Is Connected:', socket.connected);
+                console.log('- Peer Connections:', Array.from(peerConnections.keys()));
+                console.log('- Remote Streams:', Array.from(remoteStreams.keys()));
+                console.log('- ICE Candidates:', Array.from(iceCandidates.keys()));
+                console.log('- Audio Elements:', audioElements.length);
+                
+                showError(`State: Channel=${currentChannel}, Broadcasting=${isBroadcasting}, Connected=${socket.connected}, Peers=${peerConnections.size}, Streams=${remoteStreams.size}`);
+            });
+        }
+        
+        function enableAudioContext() {
+            // Create and resume audio context to enable audio playback
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                const audioContext = new AudioContextClass();
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            }
+        }
+        
+        function setupAudioTest() {
+            audioTestBtn.addEventListener('click', async () => {
+                try {
+                    // Enable audio context
+                    enableAudioContext();
+                    
+                    // Test microphone access
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    console.log('Microphone access successful');
+                    
+                    // Create a simple audio test
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+                    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                    
+                    oscillator.start();
+                    setTimeout(() => {
+                        oscillator.stop();
+                        console.log('Audio test completed');
+                    }, 1000);
+                    
+                    showError('Audio test completed - you should hear a beep');
+                    
+                    // Clean up microphone stream
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                } catch (error) {
+                    console.error('Audio test failed:', error);
+                    showError('Audio test failed: ' + error.message);
+                }
+            });
+            
+            // Manual audio test - creates a simple audio element
+            manualAudioTestBtn.addEventListener('click', () => {
+                try {
+                    // Create a simple audio element with a test sound
+                    const audio = new Audio();
+                    
+                    // Create a simple beep using Web Audio API
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    
+                    oscillator.start();
+                    setTimeout(() => {
+                        oscillator.stop();
+                        console.log('Manual audio test completed');
+                    }, 2000);
+                    
+                    showError('Manual audio test - you should hear a beep for 2 seconds');
+                    
+                } catch (error) {
+                    console.error('Manual audio test failed:', error);
+                    showError('Manual audio test failed: ' + error.message);
+                }
+            });
+        }
+
+        function joinChannel(channelId) {
+            if (currentChannel === channelId) return;
+            
+            console.log('🔄 Joining channel:', channelId);
+            
+            leaveChannel();
+            
+            socket.emit('join-channel', {
+                channelId: channelId,
+                userId: userId
+            });
+            
+            console.log('✅ Channel join request sent for:', channelId);
+        }
+
+        function leaveChannel() {
+            if (currentChannel) {
+                stopBroadcasting();
+                cleanupWebRTC();
+                currentChannel = null;
+                currentChannelEl.textContent = 'None';
+                participantCountEl.textContent = '0';
+                pttBtn.disabled = true;
+                updateChannelButtons();
+                hideAudioIndicator();
+            }
+        }
+
+        async function startBroadcasting() {
+            if (!currentChannel || isBroadcasting) return;
+            
+            try {
+                console.log('🎤 Starting broadcasting in channel:', currentChannel);
+                
+                // First become broadcaster
+                socket.emit('become-broadcaster', {
+                    channelId: currentChannel
+                });
+                
+                // Set broadcasting state immediately
+                isBroadcasting = true;
+                pttBtn.classList.add('broadcasting');
+                pttBtn.textContent = '🔴';
+                
+                // Wait a bit for the server to process
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Then initialize WebRTC
+                await initializeWebRTC();
+                
+                console.log('✅ Broadcasting started successfully');
+            } catch (error) {
+                console.error('❌ Failed to start broadcasting:', error);
+                isBroadcasting = false;
+                pttBtn.classList.remove('broadcasting');
+                pttBtn.textContent = '🎤';
+                showError('Failed to start broadcasting: ' + error.message);
+            }
+        }
+
+        function stopBroadcasting() {
+            if (!isBroadcasting) return;
+            
+            socket.emit('stop-broadcasting', {
+                channelId: currentChannel
+            });
+            cleanupWebRTC();
+            isBroadcasting = false;
+            pttBtn.classList.remove('broadcasting');
+            pttBtn.textContent = '🎤';
+        }
+
+        async function initializeWebRTC() {
+            try {
+                // Get high-quality audio stream
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 1
+                    },
+                    video: false
+                });
+
+                console.log('Local audio stream obtained:', localStream.getAudioTracks()[0].getSettings());
+
+                // Create a single peer connection for broadcasting
+                const peerConnection = new RTCPeerConnection(configuration);
+                peerConnections.set('broadcast', peerConnection);
+
+                // Add audio track with specific constraints
+                const audioTrack = localStream.getAudioTracks()[0];
+                peerConnection.addTrack(audioTrack, localStream);
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log('Sending ICE candidate for broadcast');
+                        socket.emit('ice-candidate', {
+                            channelId: currentChannel,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+                
+                // Monitor connection state for broadcasting
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('Broadcast connection state changed:', peerConnection.connectionState);
+                    if (peerConnection.connectionState === 'connected') {
+                        console.log('✅ Broadcast connection established successfully');
+                    }
+                };
+                
+                peerConnection.oniceconnectionstatechange = () => {
+                    console.log('Broadcast ICE connection state changed:', peerConnection.iceConnectionState);
+                };
+
+                // Create offer with audio-specific constraints
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: false
+                });
+                
+                // Set audio codec preferences for better quality
+                offer.sdp = offer.sdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=0; maxaveragebitrate=128000');
+                
+                await peerConnection.setLocalDescription(offer);
+
+                // Only send offer if we're the broadcaster
+                if (isBroadcasting) {
+                    socket.emit('webrtc-offer', {
+                        channelId: currentChannel,
+                        offer: offer
+                    });
+                    
+                    console.log('📤 WebRTC offer sent to channel:', currentChannel);
+                } else {
+                    console.log('⚠️ Not broadcasting, skipping WebRTC offer');
+                }
+                
+                console.log('Broadcasting peer connection created with enhanced audio');
+            } catch (error) {
+                throw new Error('Failed to access microphone: ' + error.message);
+            }
+        }
+
+        async function handleWebRTCOffer(data) {
+            try {
+                console.log('Handling WebRTC offer from:', data.fromId);
+                console.log('Current peer connections before:', Array.from(peerConnections.keys()));
+                
+                // Create a new peer connection for this broadcaster
+                const peerConnection = new RTCPeerConnection(configuration);
+                peerConnections.set(data.fromId, peerConnection);
+                
+                console.log('Created peer connection for:', data.fromId);
+                console.log('Current peer connections after:', Array.from(peerConnections.keys()));
+                
+                // Initialize ICE candidate buffer for this connection
+                iceCandidates.set(data.fromId, []);
+
+                // Get local stream for receiving with enhanced audio settings
+                if (!localStream) {
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 48000,
+                            channelCount: 1
+                        },
+                        video: false
+                    });
+                    console.log('Local audio stream obtained for receiving:', localStream.getAudioTracks()[0].getSettings());
+                }
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('ice-candidate', {
+                            channelId: currentChannel,
+                            candidate: event.candidate,
+                            targetId: data.fromId
+                        });
+                    }
+                };
+
+                peerConnection.ontrack = (event) => {
+                    if (event.streams[0]) {
+                        console.log('🎵 Remote audio stream received from:', data.fromId);
+                        const remoteStream = event.streams[0];
+                        
+                        // Log audio track details
+                        const audioTracks = remoteStream.getAudioTracks();
+                        if (audioTracks.length > 0) {
+                            console.log('Audio track settings:', audioTracks[0].getSettings());
+                            console.log('Audio track enabled:', audioTracks[0].enabled);
+                            console.log('Audio track muted:', audioTracks[0].muted);
+                        }
+                        
+                        remoteStreams.set(data.fromId, remoteStream);
+                        
+                        // Ensure audio context is ready before playing
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        if (audioContext.state === 'suspended') {
+                            audioContext.resume().then(() => {
+                                console.log('Audio context resumed for playback');
+                                playRemoteAudio(remoteStream, data.fromId);
+                            });
+                        } else {
+                            playRemoteAudio(remoteStream, data.fromId);
+                        }
+                    }
+                };
+                
+                // Monitor connection state
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('Connection state changed for', data.fromId, ':', peerConnection.connectionState);
+                };
+                
+                peerConnection.oniceconnectionstatechange = () => {
+                    console.log('ICE connection state changed for', data.fromId, ':', peerConnection.iceConnectionState);
+                };
+
+                // Set remote description first
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                console.log('Remote description set for:', data.fromId);
+                
+                // Process any buffered ICE candidates
+                const bufferedCandidates = iceCandidates.get(data.fromId) || [];
+                console.log('Processing', bufferedCandidates.length, 'buffered ICE candidates for:', data.fromId);
+                
+                for (const candidate of bufferedCandidates) {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log('Buffered ICE candidate added for:', data.fromId);
+                    } catch (error) {
+                        console.error('Failed to add buffered ICE candidate:', error);
+                    }
+                }
+                
+                // Clear the buffer
+                iceCandidates.set(data.fromId, []);
+
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                socket.emit('webrtc-answer', {
+                    channelId: currentChannel,
+                    answer: answer,
+                    targetId: data.fromId
+                });
+                
+                console.log('WebRTC answer sent to:', data.fromId);
+            } catch (error) {
+                console.error('Failed to handle WebRTC offer:', error);
+                showError('Failed to handle WebRTC offer: ' + error.message);
+            }
+        }
+
+        async function handleWebRTCAnswer(data) {
+            try {
+                console.log('Handling WebRTC answer from:', data.fromId);
+                
+                // Find the correct peer connection
+                const targetConnection = peerConnections.get('broadcast');
+                
+                if (targetConnection) {
+                    await targetConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    console.log('WebRTC answer processed successfully');
+                } else {
+                    console.warn('No broadcast peer connection found for answer from:', data.fromId);
+                }
+            } catch (error) {
+                console.error('Failed to handle WebRTC answer:', error);
+                showError('Failed to handle WebRTC answer: ' + error.message);
+            }
+        }
+
+        async function handleICECandidate(data) {
+            try {
+                console.log('Handling ICE candidate from:', data.fromId);
+                console.log('Current peer connections:', Array.from(peerConnections.keys()));
+                console.log('Is broadcasting:', isBroadcasting);
+                
+                // Find the correct peer connection
+                let targetConnection = null;
+                
+                if (isBroadcasting) {
+                    // If we're broadcasting, all ICE candidates go to the broadcast connection
+                    targetConnection = peerConnections.get('broadcast');
+                    console.log('Broadcasting mode - using broadcast connection for ICE from:', data.fromId);
+                } else {
+                    // If we're listening, add to the specific broadcaster's connection
+                    targetConnection = peerConnections.get(data.fromId);
+                    console.log('Listening mode - looking for connection from:', data.fromId);
+                }
+                
+                if (targetConnection) {
+                    // Check if remote description is set
+                    if (targetConnection.remoteDescription && targetConnection.remoteDescription.type) {
+                        await targetConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        console.log('ICE candidate added successfully to:', data.fromId);
+                    } else {
+                        // Buffer the ICE candidate until remote description is set
+                        console.log('Buffering ICE candidate for:', data.fromId, '- remote description not set yet');
+                        const buffer = iceCandidates.get(data.fromId) || [];
+                        buffer.push(data.candidate);
+                        iceCandidates.set(data.fromId, buffer);
+                    }
+                } else {
+                    // Buffer ICE candidate for unknown connections (they might connect later)
+                    console.log('Buffering ICE candidate for unknown connection:', data.fromId);
+                    const buffer = iceCandidates.get(data.fromId) || [];
+                    buffer.push(data.candidate);
+                    iceCandidates.set(data.fromId, buffer);
+                    
+                    // If we're broadcasting and this is from a listener, we might need to create a connection
+                    if (isBroadcasting && !peerConnections.has(data.fromId)) {
+                        console.log('Creating listener connection for:', data.fromId);
+                        // This will be handled when we receive the WebRTC offer from this listener
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to add ICE candidate:', error);
+            }
+        }
+
+        function cleanupWebRTC() {
+            // Clean up local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            // Clean up remote streams
+            remoteStreams.forEach((stream, fromId) => {
+                stream.getTracks().forEach(track => track.stop());
+            });
+            remoteStreams.clear();
+            
+            // Clean up peer connections
+            peerConnections.forEach((connection, id) => {
+                connection.close();
+            });
+            peerConnections.clear();
+            
+            // Clean up ICE candidate buffers
+            iceCandidates.clear();
+            
+            // Clean up audio elements
+            audioElements.forEach(audio => {
+                if (audio && !audio.paused) {
+                    audio.pause();
+                    audio.srcObject = null;
+                }
+            });
+            audioElements = [];
+            
+            console.log('WebRTC cleanup completed');
+        }
+
+        function updateConnectionStatus(status, connected) {
+            connectionStatusEl.textContent = status;
+            statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
+        }
+
+        function updateChannelButtons() {
+            const buttons = channelGridEl.querySelectorAll('.channel-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.channel === currentChannel) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        function showAudioIndicator() {
+            audioIndicator.classList.add('show');
+            console.log('Audio indicator shown - audio is playing');
+        }
+
+        function hideAudioIndicator() {
+            audioIndicator.classList.remove('show');
+            console.log('Audio indicator hidden - no audio playing');
+        }
+
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        }
+        
+        function playRemoteAudio(stream, fromId = 'unknown') {
+            try {
+                console.log('Creating audio element for stream from:', fromId);
+                
+                // Stop any existing audio from this broadcaster
+                const existingAudio = audioElements.find(audio => audio.dataset.broadcaster === fromId);
+                if (existingAudio) {
+                    existingAudio.pause();
+                    existingAudio.srcObject = null;
+                    audioElements = audioElements.filter(audio => audio !== existingAudio);
+                }
+                
+                const audio = new Audio();
+                audio.srcObject = stream;
+                audio.autoplay = true;
+                audio.volume = 1.0;
+                audio.muted = false;
+                audio.loop = false;
+                audio.dataset.broadcaster = fromId;
+                
+                // Set audio properties for better real-time performance
+                audio.preload = 'auto';
+                audio.controls = false;
+                
+                // Add to audio elements array for cleanup
+                audioElements.push(audio);
+                
+                // Force audio to play immediately with enhanced error handling
+                const playAudio = async () => {
+                    try {
+                        // Ensure audio context is resumed
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        if (audioContext.state === 'suspended') {
+                            await audioContext.resume();
+                        }
+                        
+                        await audio.play();
+                        console.log('✅ Audio playing successfully from:', fromId);
+                        showAudioIndicator();
+                        
+                        // Monitor audio state
+                        audio.addEventListener('playing', () => {
+                            console.log('🎵 Audio is now playing from:', fromId);
+                        });
+                        
+                        audio.addEventListener('pause', () => {
+                            console.log('⏸️ Audio paused from:', fromId);
+                        });
+                        
+                        audio.addEventListener('ended', () => {
+                            console.log('🔚 Audio ended from:', fromId);
+                            hideAudioIndicator();
+                        });
+                        
+                    } catch (error) {
+                        console.log('❌ Audio play failed for:', fromId, error);
+                        
+                        // Try multiple fallback approaches
+                        try {
+                            // Try with different audio settings
+                            audio.muted = false;
+                            audio.volume = 1.0;
+                            audio.currentTime = 0;
+                            await audio.play();
+                            console.log('✅ Audio play succeeded with fallback for:', fromId);
+                            showAudioIndicator();
+                        } catch (e2) {
+                            console.log('❌ Second audio play attempt failed for:', fromId, e2);
+                            
+                            // Try creating a new audio element with different approach
+                            try {
+                                const newAudio = new Audio();
+                                newAudio.srcObject = stream;
+                                newAudio.autoplay = true;
+                                newAudio.volume = 1.0;
+                                newAudio.muted = false;
+                                newAudio.dataset.broadcaster = fromId;
+                                
+                                // Force play with user interaction simulation
+                                document.body.appendChild(newAudio);
+                                await newAudio.play();
+                                console.log('✅ Audio play succeeded with new element for:', fromId);
+                                showAudioIndicator();
+                                
+                                // Replace the old audio element
+                                audioElements = audioElements.filter(a => a !== audio);
+                                audioElements.push(newAudio);
+                                
+                            } catch (e3) {
+                                console.log('❌ All audio play attempts failed for:', fromId, e3);
+                                showError('Audio playback failed. Please check browser permissions and try clicking the page.');
+                            }
+                        }
+                    }
+                };
+                
+                // Start playing immediately
+                playAudio();
+                
+                return audio;
+            } catch (error) {
+                console.error('❌ Error creating audio element for:', fromId, error);
+                showError('Failed to create audio element');
+                return null;
+            }
+        }
+
+        function updateStatus() {
+            // Update status every second
+            setInterval(() => {
+                if (socket && socket.connected) {
+                    updateConnectionStatus('Connected', true);
+                } else {
+                    updateConnectionStatus('Disconnected', false);
+                }
+            }, 1000);
+        }
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+            cleanupWebRTC();
+        });
+    </script>
+</body>
+</html> 

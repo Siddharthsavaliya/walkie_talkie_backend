@@ -1,0 +1,19 @@
+{
+  "name": "walkie_talkie_backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["walkie-talkie", "webrtc", "socket.io", "flutter"],
+  "author": "",
+  "license": "ISC",
+  "description": "Walkie-Talkie POC backend with WebRTC and Socket.IO",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "cors": "^2.8.5"
+  }
+}
